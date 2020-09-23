@@ -65,6 +65,10 @@ parser.add_argument('--nOut',           type=int,   default=512,    help='Embedd
 ## For test only
 parser.add_argument('--eval', dest='eval', action='store_true', help='Eval only')
 
+## use ks x ks first
+parser.add_argument('--kernel_size', type=int, choices=[3,5,7], default=7, help='kernel size of first conv layer')
+
+
 args = parser.parse_args();
 
 ## Parse YAML
@@ -96,6 +100,7 @@ if not(os.path.exists(result_save_path)):
 
 ## Load models
 s = SpeakerNet(**vars(args));
+print(s)
 
 it          = 1;
 prevloss    = float("inf");

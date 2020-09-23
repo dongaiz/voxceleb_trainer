@@ -28,6 +28,7 @@ parser.add_argument('--download', dest='download', action='store_true', help='En
 parser.add_argument('--extract',  dest='extract',  action='store_true', help='Enable extract')
 parser.add_argument('--convert',  dest='convert',  action='store_true', help='Enable convert')
 parser.add_argument('--augment',  dest='augment',  action='store_true', help='Download and extract augmentation files')
+parser.add_argument('--batch_size',  type=int, default=48, help='parallel convert from m4a to wav')
 
 args = parser.parse_args();
 
@@ -52,13 +53,15 @@ def download(args, lines):
 		md5gt 	= line.split()[1]
 		outfile = url.split('/')[-1]
 
-		## Download files
-		out 	= subprocess.call('wget %s --user %s --password %s -O %s/%s'%(url,args.user,args.password,args.save_path,outfile), shell=True)
-		if out != 0:
-			raise ValueError('Download failed %s. If download fails repeatedly, use alternate URL on the VoxCeleb website.'%url)
+		tgtfile = '%s/%s'%(args.save_path,outfile)
+		if not os.path.exists(tgtfile):
+			## Download files
+			out 	= subprocess.call('wget %s --user %s --password %s -O %s/%s'%(url,args.user,args.password,args.save_path,outfile), shell=True)
+			if out != 0:
+				raise ValueError('Download failed %s. If download fails repeatedly, use alternate URL on the VoxCeleb website.'%url)
 
 		## Check MD5
-		md5ck 	= md5('%s/%s'%(args.save_path,outfile))
+		md5ck 	= md5(tgtfile)
 		if md5ck == md5gt:
 			print('Checksum successful %s.'%outfile)
 		else:
@@ -116,16 +119,27 @@ def part_extract(args, fname, target):
 ## Convert
 ## ========== ===========
 def convert(args):
+	from subprocess import Popen, PIPE
 
+	done 	= set([s.replace('.wav', '.m4a') for s in glob.glob('%s/voxceleb2/*/*/*.wav'%args.save_path)])
 	files 	= glob.glob('%s/voxceleb2/*/*/*.m4a'%args.save_path)
+	print('Total m4a', len(files))
+	files = [s for s in files if s not in done]
+	print('Unconverted', len(files))
 	files.sort()
 
 	print('Converting files from AAC to WAV')
-	for fname in tqdm(files):
-		outfile = fname.replace('.m4a','.wav')
-		out = subprocess.call('ffmpeg -y -i %s -ac 1 -vn -acodec pcm_s16le -ar 16000 %s >/dev/null 2>/dev/null' %(fname,outfile), shell=True)
-		if out != 0:
-			raise ValueError('Conversion failed %s.'%fname)
+	l = len(files)
+	for ndx in tqdm(range(0, l, args.batch_size)):
+		cmds = []
+		for fname in files[ndx:min(ndx + args.batch_size, l)]:
+			outfile = fname.replace('.m4a','.wav')
+			cmds.append('/snap/bin/ffmpeg -y -i %s -ac 1 -vn -acodec pcm_s16le -ar 16000 %s >/dev/null 2>/dev/null' %(fname,outfile))
+		procs_list = [Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True) for cmd in cmds]
+		for proc in procs_list:
+			out = proc.wait()
+			if out != 0:
+				raise ValueError('Conversion failed %s.'%fname)
 
 ## ========== ===========
 ## Split MUSAN for faster random access
@@ -177,9 +191,9 @@ if __name__ == "__main__":
 
 	if args.extract:
 		concatenate(args, files)
-		for file in files:
+		for file in files+['vox1_test_wav.zip']:
 			full_extract(args,os.path.join(args.save_path,file.split()[1]))
-		out = subprocess.call('mv %s/dev/aac/* %s/aac/ && rm -r %s/dev' %(args.save_path,args.save_path,args.save_path), shell=True)
+		out = subprocess.call('mv %s/dev/aac %s/aac && rm -r %s/dev' %(args.save_path,args.save_path,args.save_path), shell=True)
 		out = subprocess.call('mv %s/wav %s/voxceleb1' %(args.save_path,args.save_path), shell=True)
 		out = subprocess.call('mv %s/aac %s/voxceleb2' %(args.save_path,args.save_path), shell=True)
 

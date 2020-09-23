@@ -9,7 +9,7 @@ from torch.nn import Parameter
 from models.ResNetBlocks import *
 
 class ResNetSE(nn.Module):
-    def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=40, log_input=True, **kwargs):
+    def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=40, log_input=True, kernel_size=7, **kwargs):
         super(ResNetSE, self).__init__()
 
         print('Embedding size is %d, encoder %s.'%(nOut, encoder_type))
@@ -19,7 +19,7 @@ class ResNetSE(nn.Module):
         self.n_mels     = n_mels
         self.log_input  = log_input
 
-        self.conv1 = nn.Conv2d(1, num_filters[0] , kernel_size=7, stride=(2, 1), padding=3,
+        self.conv1 = nn.Conv2d(1, num_filters[0] , kernel_size=kernel_size, stride=(2, 1), padding=kernel_size//2,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(num_filters[0])
         self.relu = nn.ReLU(inplace=True)
@@ -112,8 +112,8 @@ class ResNetSE(nn.Module):
         return x
 
 
-def MainModel(nOut=256, **kwargs):
+def MainModel(nOut=256, kernel_size=7, **kwargs):
     # Number of filters
     num_filters = [16, 32, 64, 128]
-    model = ResNetSE(SEBasicBlock, [3, 4, 6, 3], num_filters, nOut, **kwargs)
+    model = ResNetSE(SEBasicBlock, [3, 4, 6, 3], num_filters, nOut, kernel_size=kernel_size, **kwargs)
     return model
