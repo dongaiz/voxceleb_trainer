@@ -9,7 +9,7 @@ from torch.nn import Parameter
 from models.ResNetBlocks import *
 
 class ResNetSE(nn.Module):
-    def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=40, log_input=True, kernel_size=7, **kwargs):
+    def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=40, log_input=True, kernel_size=7, first_last_stride=1, **kwargs):
         super(ResNetSE, self).__init__()
 
         print('Embedding size is %d, encoder %s.'%(nOut, encoder_type))
@@ -19,7 +19,7 @@ class ResNetSE(nn.Module):
         self.n_mels     = n_mels
         self.log_input  = log_input
 
-        self.conv1 = nn.Conv2d(1, num_filters[0] , kernel_size=kernel_size, stride=(2, 1), padding=kernel_size//2,
+        self.conv1 = nn.Conv2d(1, num_filters[0] , kernel_size=kernel_size, stride=(2, first_last_stride), padding=kernel_size//2,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(num_filters[0])
         self.relu = nn.ReLU(inplace=True)
@@ -27,7 +27,7 @@ class ResNetSE(nn.Module):
         self.layer1 = self._make_layer(block, num_filters[0], layers[0])
         self.layer2 = self._make_layer(block, num_filters[1], layers[1], stride=(2, 2))
         self.layer3 = self._make_layer(block, num_filters[2], layers[2], stride=(2, 2))
-        self.layer4 = self._make_layer(block, num_filters[3], layers[3], stride=(1, 1))
+        self.layer4 = self._make_layer(block, num_filters[3], layers[3], stride=(first_last_stride, first_last_stride))
 
         self.instancenorm   = nn.InstanceNorm1d(n_mels)
         self.torchfb        = torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=512, win_length=400, hop_length=160, window_fn=torch.hamming_window, n_mels=n_mels)
@@ -112,8 +112,9 @@ class ResNetSE(nn.Module):
         return x
 
 
-def MainModel(nOut=256, kernel_size=7, **kwargs):
+def MainModel(nOut=256, kernel_size=7, first_last_stride=1, width_multi=1, **kwargs):
     # Number of filters
     num_filters = [16, 32, 64, 128]
-    model = ResNetSE(SEBasicBlock, [3, 4, 6, 3], num_filters, nOut, kernel_size=kernel_size, **kwargs)
+    num_filters = [int(s*width_multi) for s in num_filters]
+    model = ResNetSE(SEBasicBlock, [3, 4, 6, 3], num_filters, nOut, kernel_size=kernel_size, first_last_stride=first_last_stride, **kwargs)
     return model

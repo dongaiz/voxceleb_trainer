@@ -67,7 +67,8 @@ parser.add_argument('--eval', dest='eval', action='store_true', help='Eval only'
 
 ## use ks x ks first
 parser.add_argument('--kernel_size', type=int, choices=[3,5,7], default=7, help='kernel size of first conv layer')
-
+parser.add_argument('--width_multi', type=float, default=1.0, help='width multiplier')
+parser.add_argument('--first_last_stride', type=int, choices=[1,2], default=1, help='stride to reduce mac for both before resnet and last resnet layer')
 
 args = parser.parse_args();
 
@@ -100,7 +101,9 @@ if not(os.path.exists(result_save_path)):
 
 ## Load models
 s = SpeakerNet(**vars(args));
-print(s)
+from ptflops import get_model_complexity_info
+flops, params = get_model_complexity_info(s.__S__, (48240,),        as_strings=True,        print_per_layer_stat=True)
+print('Total flops={}, total params={}'.format(flops, params))
 
 it          = 1;
 prevloss    = float("inf");
@@ -124,7 +127,6 @@ for ii in range(0,it-1):
         
 ## Evaluation code
 if args.eval == True:
-        
     sc, lab, trials = s.evaluateFromList(args.test_list, print_interval=100, test_path=args.test_path, eval_frames=args.eval_frames)
     result = tuneThresholdfromScore(sc, lab, [1, 0.1]);
     print('EER %2.4f'%result[1])
